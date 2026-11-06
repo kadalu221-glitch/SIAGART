@@ -1,0 +1,1055 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>SIAGA-RT Dashboard Admin & Warga</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        brand: {
+                            dark: '#090d16',
+                            card: '#131b2e',
+                            border: '#2a3854',
+                            red: '#ef4444',
+                            amber: '#f59e0b',
+                            cyan: '#06b6d4',
+                            green: '#10b981',
+                            purple: '#8b5cf6'
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body {
+            background-color: #050811;
+            color: #f8fafc;
+            user-select: none;
+            -webkit-user-select: none;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        }
+
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+        @keyframes pulse-ring {
+            0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7); }
+            70% { transform: scale(1.05); box-shadow: 0 0 0 20px rgba(239, 68, 68, 0); }
+            100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
+        }
+
+        .panic-pulse { animation: pulse-ring 1.5s infinite; }
+
+        @keyframes mobile-strobe {
+            0% { background-color: rgba(239, 68, 68, 0.2); }
+            50% { background-color: rgba(185, 28, 28, 0.6); }
+            100% { background-color: rgba(239, 68, 68, 0.2); }
+        }
+
+        .strobe-active { animation: mobile-strobe 0.8s infinite linear; }
+
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col justify-between">
+
+    <!-- GLOBAL TOP NAVBAR WITH ROLE SWITCHER -->
+    <header class="bg-slate-900 border-b border-brand-border sticky top-0 z-50 px-4 py-3 shadow-xl">
+        <div class="max-w-6xl mx-auto flex flex-wrap items-center justify-between gap-3">
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-2xl bg-gradient-to-tr from-red-600 to-amber-500 flex items-center justify-center text-xl shadow-lg shadow-red-500/30">
+                    🚨
+                </div>
+                <div>
+                    <h1 class="text-base font-extrabold text-white tracking-wide flex items-center gap-2">
+                        SIAGA-RT <span class="text-[10px] bg-red-500/20 text-red-400 border border-red-500/30 px-2 py-0.5 rounded-full font-mono">RT 05 / RW 02</span>
+                    </h1>
+                    <p class="text-xs text-slate-400">Sistem Informasi & Alarm Darurat Terpadu</p>
+                </div>
+            </div>
+
+            <!-- MODE / ROLE SWITCHER BUTTONS -->
+            <div class="flex items-center gap-2 bg-slate-950 p-1 rounded-xl border border-brand-border">
+                <button onclick="setRole('warga')" id="role-btn-warga" class="px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 bg-red-600 text-white shadow">
+                    <span>📱</span> Mode Warga
+                </button>
+                <button onclick="setRole('admin')" id="role-btn-admin" class="px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 text-slate-400 hover:text-white">
+                    <span>🛡️</span> Dashboard Admin
+                </button>
+            </div>
+
+            <!-- MUTE & AUDIO STATUS -->
+            <div class="flex items-center gap-2">
+                <button onclick="toggleAudioMute()" id="btn-sound-mute" class="p-2 rounded-xl bg-slate-800 border border-slate-700 text-slate-300 text-xs flex items-center gap-1.5 active:scale-95 transition">
+                    <span id="sound-icon">🔊</span>
+                    <span class="hidden sm:inline text-[11px] font-semibold" id="sound-text">Suara Aktif</span>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- SYSTEM EMERGENCY ACTIVE BANNER (SHOWN WHENEVER ALARM IS TRIGGERED) -->
+    <div id="top-alert-banner" class="hidden bg-gradient-to-r from-red-700 via-red-600 to-red-800 text-white px-4 py-2 text-xs font-bold items-center justify-between border-b border-red-400 shadow-xl z-50 strobe-active">
+        <div class="flex items-center gap-3">
+            <span class="animate-ping text-lg">🚨</span>
+            <div>
+                <div id="banner-title" class="uppercase font-black tracking-wider text-sm">DARURAT MALING DETEKSI</div>
+                <div id="banner-sub" class="text-xs text-yellow-200 font-mono">BLOK B NO. 12 (a.n Pak Ahmad Yani)</div>
+            </div>
+        </div>
+        <div class="flex items-center gap-3">
+            <span id="banner-phase" class="hidden sm:inline text-[11px] bg-black/40 px-3 py-1 rounded-full text-yellow-300 font-mono border border-yellow-500/30">
+                🗣️ Suara Pengumuman...
+            </span>
+            <button onclick="cancelEmergency()" class="bg-black/60 hover:bg-black/80 text-white border border-red-300 px-3 py-1.5 rounded-xl font-bold text-xs flex items-center gap-1 active:scale-95 transition">
+                ⏹️ Matikan Alarm
+            </button>
+        </div>
+    </div>
+
+    <!-- MAIN APP CONTAINER -->
+    <main class="max-w-6xl w-full mx-auto p-4 flex-1 space-y-6">
+
+        <!-- =================================================================== -->
+        <!-- VIEW MODE 1: MODE WARGA (PANIC BUTTON & LOCAL FEED) -->
+        <!-- =================================================================== -->
+        <section id="view-warga" class="space-y-6">
+            
+            <!-- WARGA SUB NAV TABS -->
+            <div class="flex border-b border-brand-border gap-2 text-xs font-bold overflow-x-auto no-scrollbar">
+                <button onclick="switchWargaTab('tab-panic')" id="wtab-btn-panic" class="warga-tab-btn py-2.5 px-4 text-red-400 border-b-2 border-red-500 flex items-center gap-2">
+                    <span>🚨</span> Tombol Darurat
+                </button>
+                <button onclick="switchWargaTab('tab-map')" id="wtab-btn-map" class="warga-tab-btn py-2.5 px-4 text-slate-400 hover:text-slate-200 flex items-center gap-2">
+                    <span>🗺️</span> Denah Visual RT
+                </button>
+                <button onclick="switchWargaTab('tab-directory')" id="wtab-btn-directory" class="warga-tab-btn py-2.5 px-4 text-slate-400 hover:text-slate-200 flex items-center gap-2">
+                    <span>📖</span> Direktori Warga
+                </button>
+                <button onclick="switchWargaTab('tab-feed')" id="wtab-btn-feed" class="warga-tab-btn py-2.5 px-4 text-slate-400 hover:text-slate-200 flex items-center gap-2">
+                    <span>📋</span> Riwayat Kejadian
+                </button>
+            </div>
+
+            <!-- TAB 1: PANIC BUTTON (WARGA MAIN) -->
+            <div id="tab-panic" class="tab-content active space-y-6">
+                
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    
+                    <!-- LEFT COLUMN: SENDER HOUSE & CATEGORY SELECTOR -->
+                    <div class="space-y-4 md:col-span-1">
+                        
+                        <!-- CURRENT HOUSE SELECTOR -->
+                        <div class="bg-brand-card border border-brand-border rounded-2xl p-4 space-y-3 shadow-lg">
+                            <label class="text-xs font-bold text-slate-400 uppercase tracking-wider block">1. Lokasi Rumah Pelapor:</label>
+                            <select id="warga-house-select" onchange="onHouseSelectChange()" class="w-full bg-slate-900 border border-brand-border rounded-xl p-3 text-sm text-white font-extrabold outline-none focus:border-red-500 transition">
+                                <!-- Populated dynamically from database -->
+                            </select>
+                            <div class="text-xs text-cyan-400 font-semibold flex justify-between items-center bg-cyan-950/40 border border-cyan-500/20 p-2.5 rounded-xl">
+                                <span>Pemilik Terdaftar:</span>
+                                <span id="warga-owner-display" class="font-bold text-white">Pak Ahmad Yani</span>
+                            </div>
+                        </div>
+
+                        <!-- CATEGORY SELECTION -->
+                        <div class="bg-brand-card border border-brand-border rounded-2xl p-4 space-y-3 shadow-lg">
+                            <label class="text-xs font-bold text-slate-400 uppercase tracking-wider block">2. Pilih Jenis Darurat:</label>
+                            <div class="grid grid-cols-3 gap-2">
+                                <button onclick="selectCategory('maling')" id="cat-maling" class="cat-btn bg-amber-500/10 border-2 border-amber-500 text-amber-300 rounded-xl p-3 text-center flex flex-col items-center gap-1 active:scale-95 transition">
+                                    <span class="text-2xl">🥷</span>
+                                    <span class="text-xs font-bold">Maling</span>
+                                </button>
+                                <button onclick="selectCategory('kebakaran')" id="cat-kebakaran" class="cat-btn bg-slate-800 border border-brand-border text-slate-300 rounded-xl p-3 text-center flex flex-col items-center gap-1 active:scale-95 transition">
+                                    <span class="text-2xl">🔥</span>
+                                    <span class="text-xs font-bold">Kebakaran</span>
+                                </button>
+                                <button onclick="selectCategory('medis')" id="cat-medis" class="cat-btn bg-slate-800 border border-brand-border text-slate-300 rounded-xl p-3 text-center flex flex-col items-center gap-1 active:scale-95 transition">
+                                    <span class="text-2xl">🚑</span>
+                                    <span class="text-xs font-bold">Medis</span>
+                                </button>
+                            </div>
+                        </div>
+
+                    </div>
+
+                    <!-- CENTER COLUMN: HOLD PANIC BUTTON -->
+                    <div class="bg-brand-card border border-brand-border rounded-2xl p-6 flex flex-col items-center justify-center text-center shadow-lg md:col-span-2 relative overflow-hidden">
+                        
+                        <label class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-4">3. Tekan & Tahan Tombol Darurat (1.5 Detik):</label>
+
+                        <div class="relative flex items-center justify-center my-4">
+                            <!-- Progress Ring SVG -->
+                            <svg class="w-64 h-64 -rotate-90" viewBox="0 0 100 100">
+                                <circle cx="50" cy="50" r="44" stroke="currentColor" stroke-width="6" class="text-slate-800" fill="transparent" />
+                                <circle id="hold-circle" cx="50" cy="50" r="44" stroke="currentColor" stroke-width="6" class="text-red-500 transition-all duration-75" stroke-dasharray="276.46" stroke-dashoffset="276.46" fill="transparent" />
+                            </svg>
+
+                            <!-- Central Panic Button -->
+                            <button id="panic-button" class="absolute w-52 h-52 rounded-full bg-gradient-to-b from-red-500 to-red-700 border-4 border-red-300 text-white font-black flex flex-col items-center justify-center gap-1 shadow-2xl shadow-red-600/50 panic-pulse active:scale-95 transition">
+                                <span class="text-5xl">🚨</span>
+                                <span class="text-lg tracking-wider font-extrabold">TEKAN ALARM</span>
+                                <span class="text-[10px] font-normal opacity-90">(Tahan 1.5 Detik)</span>
+                            </button>
+                        </div>
+
+                        <p class="text-xs text-slate-400 max-w-sm mt-2">
+                            Membunyikan Sirine TOA Pos Ronda + Suara Pengumuman Alamat + Notifikasi Darurat HP Warga.
+                        </p>
+
+                        <!-- ACTIVE ALARM COUNTER & CANCEL PANEL -->
+                        <div id="warga-active-panel" class="hidden mt-6 w-full max-w-md bg-red-950/60 border border-red-500/50 rounded-2xl p-4 space-y-3">
+                            <div class="flex justify-between items-center text-xs font-bold text-red-300">
+                                <span class="flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-red-500 animate-ping"></span> ALARM AKTIF BERJALAN</span>
+                                <span id="warga-timer" class="font-mono text-base text-yellow-300">00:00</span>
+                            </div>
+                            <button onclick="cancelEmergency()" class="w-full py-3 bg-red-600 hover:bg-red-500 text-white rounded-xl font-extrabold text-xs shadow-lg active:scale-95 transition flex items-center justify-center gap-2">
+                                ⏹️ MATIKAN ALARM SEKARANG
+                            </button>
+                        </div>
+
+                    </div>
+
+                </div>
+
+            </div>
+
+            <!-- TAB 2: VISUAL MAP GRID -->
+            <div id="tab-map" class="tab-content space-y-4">
+                <div class="flex justify-between items-center">
+                    <h3 class="text-sm font-bold text-white flex items-center gap-2">
+                        <span>🗺️</span> Denah Visual Wilayah RT 05 / RW 02
+                    </h3>
+                    <span class="text-xs text-slate-400">Klik petak rumah untuk simulasi darurat</span>
+                </div>
+
+                <div class="bg-brand-card border border-brand-border rounded-2xl p-6 shadow-lg">
+                    <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3" id="visual-map-grid">
+                        <!-- Rendered dynamically -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- TAB 3: RESIDENT DIRECTORY -->
+            <div id="tab-directory" class="tab-content space-y-4">
+                <div class="flex justify-between items-center">
+                    <h3 class="text-sm font-bold text-white flex items-center gap-2">
+                        <span>📖</span> Buku Alamat & Kontak Warga RT 05
+                    </h3>
+                    <span id="directory-count" class="text-xs font-mono text-cyan-400">0 Rumah Terdaftar</span>
+                </div>
+
+                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4" id="directory-grid">
+                    <!-- Rendered dynamically -->
+                </div>
+            </div>
+
+            <!-- TAB 4: EVENT HISTORY -->
+            <div id="tab-feed" class="tab-content space-y-4">
+                <h3 class="text-sm font-bold text-white flex items-center gap-2">
+                    <span>📋</span> Riwayat Laporan Kejadian Darurat
+                </h3>
+                <div class="space-y-3" id="warga-history-list">
+                    <!-- Rendered dynamically -->
+                </div>
+            </div>
+
+        </section>
+
+        <!-- =================================================================== -->
+        <!-- VIEW MODE 2: DASHBOARD ADMIN (RT MANAGEMENT & DATABASE CRUD) -->
+        <!-- =================================================================== -->
+        <section id="view-admin" class="hidden space-y-6">
+            
+            <!-- ADMIN HEADER BANNER -->
+            <div class="bg-gradient-to-r from-slate-900 via-brand-card to-slate-900 border border-brand-border rounded-2xl p-6 flex flex-wrap justify-between items-center gap-4 shadow-lg">
+                <div>
+                    <h2 class="text-lg font-black text-white flex items-center gap-2">
+                        <span>🛡️</span> Dashboard Pengurus RT / Admin System
+                    </h2>
+                    <p class="text-xs text-slate-400">Kelola database warga, monitoring status IoT speaker, dan log kejadian darurat.</p>
+                </div>
+                <button onclick="openAddResidentModal()" class="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-bold text-xs flex items-center gap-2 shadow-lg active:scale-95 transition">
+                    <span>➕</span> Tambah Data Warga Baru
+                </button>
+            </div>
+
+            <!-- ADMIN STATS CARDS -->
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div class="bg-brand-card border border-brand-border rounded-2xl p-4 shadow-md">
+                    <div class="text-xs text-slate-400 font-semibold">Total Rumah Terdaftar</div>
+                    <div class="text-2xl font-black text-white mt-1" id="stat-total-houses">0</div>
+                    <div class="text-[10px] text-emerald-400 mt-1">Blok A - E Terhubung</div>
+                </div>
+                <div class="bg-brand-card border border-brand-border rounded-2xl p-4 shadow-md">
+                    <div class="text-xs text-slate-400 font-semibold">Status Speaker Pos Ronda</div>
+                    <div class="text-2xl font-black text-emerald-400 mt-1 flex items-center gap-1.5">
+                        <span class="w-3 h-3 rounded-full bg-emerald-500 animate-pulse"></span> READY
+                    </div>
+                    <div class="text-[10px] text-slate-400 mt-1">ESP32 + Amplifier Standby</div>
+                </div>
+                <div class="bg-brand-card border border-brand-border rounded-2xl p-4 shadow-md">
+                    <div class="text-xs text-slate-400 font-semibold">Total Kejadian Ditangani</div>
+                    <div class="text-2xl font-black text-amber-400 mt-1" id="stat-total-events">2</div>
+                    <div class="text-[10px] text-slate-400 mt-1">Bulan Ini</div>
+                </div>
+                <div class="bg-brand-card border border-brand-border rounded-2xl p-4 shadow-md">
+                    <div class="text-xs text-slate-400 font-semibold">Sinyal Alarm aktif</div>
+                    <div class="text-2xl font-black text-slate-500 mt-1" id="stat-active-alarm">NIHIL</div>
+                    <div class="text-[10px] text-slate-400 mt-1">Sistem Kondisi Aman</div>
+                </div>
+            </div>
+
+            <!-- DATABASE MANAGEMENT TABLE -->
+            <div class="bg-brand-card border border-brand-border rounded-2xl p-5 space-y-4 shadow-lg">
+                <div class="flex flex-wrap justify-between items-center gap-3">
+                    <h3 class="text-sm font-bold text-white flex items-center gap-2">
+                        <span>👥</span> Database Kepala Keluarga & Rumah Warga
+                    </h3>
+                    
+                    <!-- SEARCH & EXPORT CONTROLS -->
+                    <div class="flex items-center gap-2 w-full sm:w-auto">
+                        <div class="relative flex-1 sm:w-64">
+                            <input type="text" id="admin-search-input" onkeyup="renderAdminTable()" placeholder="Cari nama, blok, atau no..." class="w-full bg-slate-900 border border-brand-border rounded-xl px-3 py-2 text-xs text-white placeholder-slate-500 outline-none focus:border-blue-500">
+                        </div>
+                        <button onclick="exportDataJSON()" class="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 rounded-xl text-xs font-bold flex items-center gap-1">
+                            📥 Export
+                        </button>
+                    </div>
+                </div>
+
+                <!-- TABLE CONTENT -->
+                <div class="overflow-x-auto no-scrollbar">
+                    <table class="w-full text-left text-xs text-slate-300 border-collapse">
+                        <thead>
+                            <tr class="border-b border-brand-border bg-slate-900/80 text-slate-400 font-bold uppercase tracking-wider">
+                                <th class="p-3">No</th>
+                                <th class="p-3">Blok & No Rumah</th>
+                                <th class="p-3">Nama Kepala Keluarga</th>
+                                <th class="p-3">No. HP / WhatsApp</th>
+                                <th class="p-3">Status Hunian</th>
+                                <th class="p-3">Anggota</th>
+                                <th class="p-3 text-center">Aksi</th>
+                            </tr>
+                        </thead>
+                        <tbody id="admin-warga-table-body">
+                            <!-- Populated dynamically -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- HARDWARE IoT TEST & SYSTEM LOGS -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                
+                <!-- HARDWARE TEST BENCH -->
+                <div class="bg-brand-card border border-brand-border rounded-2xl p-5 space-y-4 shadow-lg">
+                    <h3 class="text-sm font-bold text-white flex items-center gap-2">
+                        <span>⚡</span> Pengujian Speaker & Hardware IoT Pos Ronda
+                    </h3>
+                    <p class="text-xs text-slate-400">Gunakan kontrol di bawah ini untuk menguji suara sirine dan modul pengumuman suara pengurus RT.</p>
+                    
+                    <div class="space-y-2">
+                        <button onclick="testTTSAnnouncement()" class="w-full py-2.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-cyan-400 rounded-xl font-bold text-xs flex items-center justify-center gap-2 active:scale-95 transition">
+                            🗣️ Tes Pengumuman Suara TTS Bahasa Indonesia
+                        </button>
+                        <button onclick="testHardwareHorn()" class="w-full py-2.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-amber-400 rounded-xl font-bold text-xs flex items-center justify-center gap-2 active:scale-95 transition">
+                            🔊 Tes Bunyi Sirine Horn Pos Ronda (3 Detik)
+                        </button>
+                    </div>
+                </div>
+
+                <!-- ADMIN AUDIT LOG -->
+                <div class="bg-brand-card border border-brand-border rounded-2xl p-5 space-y-4 shadow-lg">
+                    <h3 class="text-sm font-bold text-white flex items-center gap-2">
+                        <span>📜</span> System Audit Log & Telemetry
+                    </h3>
+                    <div class="bg-slate-950 border border-brand-border rounded-xl p-3 font-mono text-[11px] h-44 overflow-y-auto space-y-1 text-slate-400 no-scrollbar" id="admin-telemetry-log">
+                        <div>[SYSTEM] SIAGA-RT initialized. MQTT connected to broker.emqx.io</div>
+                        <div>[SYSTEM] Database loaded: 6 resident houses online.</div>
+                        <div>[HARDWARE] Relays 1 & 2 calibrated (STANDBY Mode).</div>
+                    </div>
+                </div>
+
+            </div>
+
+        </section>
+
+    </main>
+
+    <!-- FOOTER -->
+    <footer class="bg-slate-950 border-t border-brand-border py-4 px-4 text-center text-xs text-slate-500">
+        <p>SIAGA-RT &copy; 2026 - Sistem Respon Cepat Darurat Warga RT 05 / RW 02</p>
+    </footer>
+
+    <!-- =================================================================== -->
+    <!-- MODAL: TAMBAH / EDIT DATA WARGA -->
+    <!-- =================================================================== -->
+    <div id="modal-resident" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-brand-card border border-brand-border rounded-3xl w-full max-w-md p-6 space-y-5 shadow-2xl relative animate-in fade-in zoom-in duration-150">
+            
+            <div class="flex justify-between items-center border-b border-brand-border pb-3">
+                <h3 class="text-base font-extrabold text-white" id="modal-title">Tambah Data Warga Baru</h3>
+                <button onclick="closeResidentModal()" class="text-slate-400 hover:text-white text-lg">✕</button>
+            </div>
+
+            <form id="form-resident" onsubmit="handleSaveResident(event)" class="space-y-4 text-xs">
+                <input type="hidden" id="form-id">
+
+                <div>
+                    <label class="text-slate-400 font-bold block mb-1">Nama Kepala Keluarga / Penghuni *</label>
+                    <input type="text" id="form-name" required placeholder="Contoh: Pak Budi Santoso" class="w-full bg-slate-900 border border-brand-border rounded-xl p-3 text-white font-semibold outline-none focus:border-emerald-500">
+                </div>
+
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="text-slate-400 font-bold block mb-1">Blok *</label>
+                        <select id="form-block" required class="w-full bg-slate-900 border border-brand-border rounded-xl p-3 text-white font-semibold outline-none focus:border-emerald-500">
+                            <option value="Blok A">Blok A</option>
+                            <option value="Blok B">Blok B</option>
+                            <option value="Blok C">Blok C</option>
+                            <option value="Blok D">Blok D</option>
+                            <option value="Blok E">Blok E</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="text-slate-400 font-bold block mb-1">Nomor Rumah *</label>
+                        <input type="text" id="form-no" required placeholder="Contoh: No. 04" class="w-full bg-slate-900 border border-brand-border rounded-xl p-3 text-white font-semibold outline-none focus:border-emerald-500">
+                    </div>
+                </div>
+
+                <div>
+                    <label class="text-slate-400 font-bold block mb-1">No. HP / WhatsApp *</label>
+                    <input type="text" id="form-phone" required placeholder="Contoh: 081234567890" class="w-full bg-slate-900 border border-brand-border rounded-xl p-3 text-white font-semibold outline-none focus:border-emerald-500">
+                </div>
+
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="text-slate-400 font-bold block mb-1">Status Hunian</label>
+                        <select id="form-status" class="w-full bg-slate-900 border border-brand-border rounded-xl p-3 text-white font-semibold outline-none">
+                            <option value="Tetap">Rumah Tetap</option>
+                            <option value="Kontrak">Kontrak / Sewa</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="text-slate-400 font-bold block mb-1">Jumlah Jiwa (Orang)</label>
+                        <input type="number" id="form-members" min="1" max="15" value="4" class="w-full bg-slate-900 border border-brand-border rounded-xl p-3 text-white font-semibold outline-none">
+                    </div>
+                </div>
+
+                <div class="flex gap-2 pt-2">
+                    <button type="button" onclick="closeResidentModal()" class="w-1/2 py-3 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl font-bold">Batal</button>
+                    <button type="submit" class="w-1/2 py-3 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-extrabold shadow-lg">Simpan Data</button>
+                </div>
+            </form>
+
+        </div>
+    </div>
+
+    <!-- CUSTOM TOAST NOTIFICATION CONTAINER -->
+    <div id="toast-container" class="fixed bottom-5 right-5 z-50 flex flex-col gap-2"></div>
+
+    <!-- JAVASCRIPT APPLICATION LOGIC -->
+    <script>
+        // GLOBAL STATE STORE
+        const state = {
+            role: 'warga',
+            wargaTab: 'tab-panic',
+            selectedCategory: 'maling',
+            selectedHouseId: 'h1',
+            isMuted: false,
+            activeEmergency: null,
+            timerInterval: null,
+            loopTimeout: null,
+            houses: [
+                { id: 'h1', block: 'Blok A', no: 'No. 04', owner: 'Pak Budi Santoso', phone: '081234567001', status: 'Tetap', members: 4 },
+                { id: 'h2', block: 'Blok A', no: 'No. 08', owner: 'Bu Siti Rahmawati', phone: '081234567002', status: 'Tetap', members: 3 },
+                { id: 'h3', block: 'Blok B', no: 'No. 12', owner: 'Pak Ahmad Yani', phone: '081234567003', status: 'Tetap', members: 5 },
+                { id: 'h4', block: 'Blok B', no: 'No. 16', owner: 'Bu Dewi Lestari', phone: '081234567004', status: 'Kontrak', members: 2 },
+                { id: 'h5', block: 'Blok C', no: 'No. 04', owner: 'Pak Eko Prasetyo', phone: '081234567005', status: 'Tetap', members: 4 },
+                { id: 'h6', block: 'Blok D', no: 'No. 08', owner: 'Bu Rahma Melati', phone: '081234567006', status: 'Tetap', members: 3 }
+            ],
+            history: [
+                { id: 101, house: 'Blok B No. 12', owner: 'Pak Ahmad Yani', category: 'MALING', time: 'Kemarin 21:30 WIB', status: 'Ditangani Warga' },
+                { id: 102, house: 'Blok A No. 04', owner: 'Pak Budi Santoso', category: 'MEDIS', time: '3 Hari Lalu', status: 'Ambulans Datang' }
+            ]
+        };
+
+        let audioCtx = null;
+        let oscNode = null;
+        let holdTimer = null;
+        const HOLD_MS = 1500;
+
+        // INITIALIZATION
+        window.addEventListener('DOMContentLoaded', () => {
+            renderHouseDropdown();
+            renderMapGrid();
+            renderDirectoryGrid();
+            renderHistoryList();
+            renderAdminTable();
+            initHoldButton();
+            updateStats();
+        });
+
+        // ROLE SWITCHER
+        function setRole(role) {
+            state.role = role;
+            const btnW = document.getElementById('role-btn-warga');
+            const btnA = document.getElementById('role-btn-admin');
+            const viewW = document.getElementById('view-warga');
+            const viewA = document.getElementById('view-admin');
+
+            if (role === 'warga') {
+                btnW.className = 'px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 bg-red-600 text-white shadow';
+                btnA.className = 'px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 text-slate-400 hover:text-white';
+                viewW.classList.remove('hidden');
+                viewA.classList.add('hidden');
+            } else {
+                btnA.className = 'px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 bg-emerald-600 text-white shadow';
+                btnW.className = 'px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 text-slate-400 hover:text-white';
+                viewA.classList.remove('hidden');
+                viewW.classList.add('hidden');
+            }
+        }
+
+        // WARGA TABS
+        function switchWargaTab(tabId) {
+            state.wargaTab = tabId;
+            document.querySelectorAll('#view-warga .tab-content').forEach(t => t.classList.remove('active'));
+            document.getElementById(tabId).classList.add('active');
+
+            document.querySelectorAll('.warga-tab-btn').forEach(btn => {
+                btn.className = 'warga-tab-btn py-2.5 px-4 text-slate-400 hover:text-slate-200 flex items-center gap-2 border-b-2 border-transparent';
+            });
+
+            const activeBtn = document.getElementById(`wtab-btn-${tabId.replace('tab-', '')}`);
+            if (activeBtn) {
+                activeBtn.className = 'warga-tab-btn py-2.5 px-4 text-red-400 border-b-2 border-red-500 flex items-center gap-2 font-bold';
+            }
+        }
+
+        // CATEGORY SELECTION
+        function selectCategory(cat) {
+            state.selectedCategory = cat;
+            document.querySelectorAll('.cat-btn').forEach(b => {
+                b.className = 'cat-btn bg-slate-800 border border-brand-border text-slate-300 rounded-xl p-3 text-center flex flex-col items-center gap-1 active:scale-95 transition';
+            });
+
+            const activeBtn = document.getElementById(`cat-${cat}`);
+            if (cat === 'maling') activeBtn.className = 'cat-btn bg-amber-500/10 border-2 border-amber-500 text-amber-300 rounded-xl p-3 text-center flex flex-col items-center gap-1 active:scale-95 transition';
+            if (cat === 'kebakaran') activeBtn.className = 'cat-btn bg-red-500/10 border-2 border-red-500 text-red-300 rounded-xl p-3 text-center flex flex-col items-center gap-1 active:scale-95 transition';
+            if (cat === 'medis') activeBtn.className = 'cat-btn bg-cyan-500/10 border-2 border-cyan-500 text-cyan-300 rounded-xl p-3 text-center flex flex-col items-center gap-1 active:scale-95 transition';
+        }
+
+        // HOUSE DROPDOWN RENDER
+        function renderHouseDropdown() {
+            const select = document.getElementById('warga-house-select');
+            select.innerHTML = '';
+            state.houses.forEach(h => {
+                const opt = document.createElement('option');
+                opt.value = h.id;
+                opt.innerText = `${h.block} ${h.no} (${h.owner})`;
+                if (h.id === state.selectedHouseId) opt.selected = true;
+                select.appendChild(opt);
+            });
+            onHouseSelectChange();
+        }
+
+        function onHouseSelectChange() {
+            const select = document.getElementById('warga-house-select');
+            state.selectedHouseId = select.value;
+            const h = state.houses.find(item => item.id === select.value);
+            if (h) {
+                document.getElementById('warga-owner-display').innerText = h.owner;
+            }
+        }
+
+        // HOLD-TO-ACTIVATE BUTTON
+        function initHoldButton() {
+            const btn = document.getElementById('panic-button');
+            const circle = document.getElementById('hold-circle');
+            const circumference = 276.46;
+            let startTime = 0;
+
+            const startHold = (e) => {
+                e.preventDefault();
+                if (state.activeEmergency) return;
+
+                if (navigator.vibrate) navigator.vibrate(50);
+
+                startTime = Date.now();
+                holdTimer = setInterval(() => {
+                    const elapsed = Date.now() - startTime;
+                    const pct = Math.min(1, elapsed / HOLD_MS);
+                    circle.style.strokeDashoffset = circumference - (pct * circumference);
+
+                    if (elapsed >= HOLD_MS) {
+                        clearInterval(holdTimer);
+                        holdTimer = null;
+                        circle.style.strokeDashoffset = circumference;
+                        triggerEmergencyAlert();
+                    }
+                }, 20);
+            };
+
+            const endHold = () => {
+                if (holdTimer) {
+                    clearInterval(holdTimer);
+                    holdTimer = null;
+                    circle.style.strokeDashoffset = circumference;
+                }
+            };
+
+            btn.addEventListener('touchstart', startHold);
+            btn.addEventListener('touchend', endHold);
+            btn.addEventListener('mousedown', startHold);
+            btn.addEventListener('mouseup', endHold);
+            btn.addEventListener('mouseleave', endHold);
+        }
+
+        // EMERGENCY TRIGGER ENGINE
+        function triggerEmergencyAlert() {
+            if (state.activeEmergency) return;
+
+            const house = state.houses.find(h => h.id === state.selectedHouseId) || state.houses[0];
+
+            state.activeEmergency = {
+                houseId: house.id,
+                location: `${house.block} ${house.no}`,
+                owner: house.owner,
+                category: state.selectedCategory.toUpperCase(),
+                seconds: 0
+            };
+
+            if (navigator.vibrate) navigator.vibrate([300, 100, 300, 100, 500]);
+
+            // Show active UI banner & panel
+            document.getElementById('top-alert-banner').classList.remove('hidden');
+            document.getElementById('top-alert-banner').classList.add('flex');
+            document.getElementById('banner-title').innerText = `DARURAT ${state.selectedCategory.toUpperCase()} DETEKSI`;
+            document.getElementById('banner-sub').innerText = `${state.activeEmergency.location} (a.n ${state.activeEmergency.owner})`;
+            document.getElementById('warga-active-panel').classList.remove('hidden');
+
+            logTelemetry(`[EMERGENCY TRIGGERED] ${state.activeEmergency.category} at ${state.activeEmergency.location} (${state.activeEmergency.owner})`);
+            showToast(`🚨 ALARM DARURAT AKTIF: ${state.activeEmergency.location}`, 'red');
+
+            runAudioCycle();
+
+            state.timerInterval = setInterval(() => {
+                if (state.activeEmergency) {
+                    state.activeEmergency.seconds++;
+                    const m = String(Math.floor(state.activeEmergency.seconds / 60)).padStart(2, '0');
+                    const s = String(state.activeEmergency.seconds % 60).padStart(2, '0');
+                    document.getElementById('warga-timer').innerText = `${m}:${s}`;
+                }
+            }, 1000);
+
+            renderMapGrid();
+            updateStats();
+        }
+
+        // AUDIO TTS + SIREN LOOP ENGINE
+        function runAudioCycle() {
+            if (!state.activeEmergency) return;
+
+            const text = `Keadaan darurat! Rumah ${state.activeEmergency.location} milik ${state.activeEmergency.owner}! Bahaya ${state.activeEmergency.category}! Mohon bantuan warga segera!`;
+            document.getElementById('banner-phase').innerText = '🗣️ Suara Pengumuman...';
+
+            speakText(text, () => {
+                if (!state.activeEmergency) return;
+
+                document.getElementById('banner-phase').innerText = '🚨 Sirine Horn 5 Detik...';
+                startSiren();
+
+                state.loopTimeout = setTimeout(() => {
+                    stopSiren();
+                    if (!state.activeEmergency) return;
+
+                    document.getElementById('banner-phase').innerText = '🔄 Jeda & Looping...';
+                    state.loopTimeout = setTimeout(() => {
+                        if (state.activeEmergency) runAudioCycle();
+                    }, 1000);
+                }, 5000);
+            });
+        }
+
+        function speakText(text, callback) {
+            if (state.isMuted || !('speechSynthesis' in window)) {
+                setTimeout(() => { if (callback) callback(); }, 3000);
+                return;
+            }
+
+            window.speechSynthesis.cancel();
+            const utt = new SpeechSynthesisUtterance(text);
+            utt.lang = 'id-ID';
+            utt.rate = 1.0;
+
+            let doneCalled = false;
+            const done = () => {
+                if (!doneCalled) {
+                    doneCalled = true;
+                    if (callback) callback();
+                }
+            };
+
+            utt.onend = done;
+            utt.onerror = done;
+            setTimeout(done, 5000);
+            window.speechSynthesis.speak(utt);
+        }
+
+        function startSiren() {
+            if (state.isMuted) return;
+            try {
+                const AudioContext = window.AudioContext || window.webkitAudioContext;
+                if (!audioCtx) audioCtx = new AudioContext();
+                if (audioCtx.state === 'suspended') audioCtx.resume();
+
+                oscNode = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                oscNode.type = 'sawtooth';
+                oscNode.frequency.setValueAtTime(700, audioCtx.currentTime);
+
+                const now = audioCtx.currentTime;
+                for (let i = 0; i < 5; i++) {
+                    oscNode.frequency.linearRampToValueAtTime(1200, now + i + 0.5);
+                    oscNode.frequency.linearRampToValueAtTime(700, now + i + 1.0);
+                }
+
+                gain.gain.setValueAtTime(0.3, now);
+                oscNode.connect(gain);
+                gain.connect(audioCtx.destination);
+                oscNode.start();
+            } catch (e) {}
+        }
+
+        function stopSiren() {
+            if (oscNode) {
+                try { oscNode.stop(); oscNode.disconnect(); } catch (e) {}
+                oscNode = null;
+            }
+        }
+
+        function cancelEmergency() {
+            if (state.timerInterval) clearInterval(state.timerInterval);
+            if (state.loopTimeout) clearTimeout(state.loopTimeout);
+            if ('speechSynthesis' in window) window.speechSynthesis.cancel();
+            stopSiren();
+
+            if (state.activeEmergency) {
+                logTelemetry(`[EMERGENCY CANCELLED] Alarm at ${state.activeEmergency.location} deactivated.`);
+                
+                // Push to history
+                state.history.unshift({
+                    id: Date.now(),
+                    house: state.activeEmergency.location,
+                    owner: state.activeEmergency.owner,
+                    category: state.activeEmergency.category,
+                    time: 'Baru Saja',
+                    status: 'Ditangani'
+                });
+                renderHistoryList();
+            }
+
+            state.activeEmergency = null;
+            document.getElementById('top-alert-banner').classList.add('hidden');
+            document.getElementById('warga-active-panel').classList.add('hidden');
+
+            renderMapGrid();
+            updateStats();
+            showToast('Alarm darurat berhasil dimatikan.', 'green');
+        }
+
+        function toggleAudioMute() {
+            state.isMuted = !state.isMuted;
+            document.getElementById('sound-icon').innerText = state.isMuted ? '🔇' : '🔊';
+            document.getElementById('sound-text').innerText = state.isMuted ? 'Suara Hening' : 'Suara Aktif';
+            if (state.isMuted) {
+                stopSiren();
+                if ('speechSynthesis' in window) window.speechSynthesis.cancel();
+            }
+        }
+
+        // MAP GRID RENDER
+        function renderMapGrid() {
+            const grid = document.getElementById('visual-map-grid');
+            if (!grid) return;
+            grid.innerHTML = '';
+
+            state.houses.forEach(h => {
+                const isActive = state.activeEmergency && state.activeEmergency.houseId === h.id;
+                const card = document.createElement('div');
+                card.onclick = () => {
+                    state.selectedHouseId = h.id;
+                    renderHouseDropdown();
+                    switchWargaTab('tab-panic');
+                };
+
+                card.className = isActive 
+                    ? 'bg-red-600 border-2 border-red-300 text-white rounded-xl p-3 text-center cursor-pointer shadow-lg animate-ping'
+                    : 'bg-slate-900 border border-brand-border rounded-xl p-3 text-center hover:border-cyan-500 cursor-pointer transition';
+
+                card.innerHTML = `
+                    <div class="text-xs font-black">${h.block} ${h.no}</div>
+                    <div class="text-[10px] text-slate-400 truncate">${h.owner}</div>
+                    <div class="mt-1 text-[9px] px-1.5 py-0.5 rounded ${isActive ? 'bg-black/40 text-yellow-300' : 'bg-emerald-500/20 text-emerald-400 inline-block'}">
+                        ${isActive ? '🚨 DARURAT' : 'Aman'}
+                    </div>
+                `;
+                grid.appendChild(card);
+            });
+        }
+
+        // DIRECTORY GRID RENDER
+        function renderDirectoryGrid() {
+            const grid = document.getElementById('directory-grid');
+            if (!grid) return;
+            grid.innerHTML = '';
+            document.getElementById('directory-count').innerText = `${state.houses.length} Rumah Terdaftar`;
+
+            state.houses.forEach(h => {
+                const card = document.createElement('div');
+                card.className = 'bg-brand-card border border-brand-border rounded-xl p-4 space-y-2 shadow-md';
+                card.innerHTML = `
+                    <div class="flex justify-between items-start">
+                        <div>
+                            <div class="text-sm font-extrabold text-white">${h.owner}</div>
+                            <div class="text-xs text-cyan-400 font-mono">${h.block} ${h.no}</div>
+                        </div>
+                        <span class="text-[10px] bg-slate-800 text-slate-300 px-2 py-0.5 rounded border border-slate-700">${h.status}</span>
+                    </div>
+                    <div class="text-xs text-slate-400 flex items-center justify-between border-t border-brand-border/60 pt-2 mt-1">
+                        <span>📞 ${h.phone}</span>
+                        <span>👥 ${h.members} Jiwa</span>
+                    </div>
+                `;
+                grid.appendChild(card);
+            });
+        }
+
+        // HISTORY LIST RENDER
+        function renderHistoryList() {
+            const list = document.getElementById('warga-history-list');
+            if (!list) return;
+            list.innerHTML = '';
+
+            state.history.forEach(item => {
+                const card = document.createElement('div');
+                card.className = 'bg-brand-card border border-brand-border rounded-xl p-4 flex justify-between items-center text-xs shadow';
+                card.innerHTML = `
+                    <div>
+                        <div class="font-extrabold text-white text-sm">${item.house} - ${item.owner}</div>
+                        <div class="text-[11px] text-red-400 font-bold">Kategori: ${item.category}</div>
+                        <div class="text-[10px] text-slate-400">${item.time}</div>
+                    </div>
+                    <span class="px-2.5 py-1 bg-emerald-500/20 text-emerald-400 rounded-lg font-bold text-[10px]">
+                        ${item.status}
+                    </span>
+                `;
+                list.appendChild(card);
+            });
+        }
+
+        // ADMIN TABLE CRUD RENDER
+        function renderAdminTable() {
+            const tbody = document.getElementById('admin-warga-table-body');
+            if (!tbody) return;
+            tbody.innerHTML = '';
+
+            const query = (document.getElementById('admin-search-input')?.value || '').toLowerCase();
+
+            const filtered = state.houses.filter(h => 
+                h.owner.toLowerCase().includes(query) ||
+                h.block.toLowerCase().includes(query) ||
+                h.no.toLowerCase().includes(query)
+            );
+
+            filtered.forEach((h, index) => {
+                const tr = document.createElement('tr');
+                tr.className = 'border-b border-brand-border/60 hover:bg-slate-900/40 transition';
+                tr.innerHTML = `
+                    <td class="p-3 font-mono text-slate-500">${index + 1}</td>
+                    <td class="p-3 font-bold text-white">${h.block} ${h.no}</td>
+                    <td class="p-3 font-semibold text-cyan-300">${h.owner}</td>
+                    <td class="p-3 text-slate-300 font-mono">${h.phone}</td>
+                    <td class="p-3"><span class="px-2 py-0.5 rounded text-[10px] font-bold ${h.status === 'Tetap' ? 'bg-blue-500/20 text-blue-400' : 'bg-purple-500/20 text-purple-400'}">${h.status}</span></td>
+                    <td class="p-3 text-center font-bold">${h.members}</td>
+                    <td class="p-3 text-center space-x-1">
+                        <button onclick="openEditResidentModal('${h.id}')" class="px-2.5 py-1 bg-blue-600 hover:bg-blue-500 text-white rounded text-[11px] font-bold">Edit</button>
+                        <button onclick="confirmDeleteResident('${h.id}')" class="px-2.5 py-1 bg-red-600 hover:bg-red-500 text-white rounded text-[11px] font-bold">Hapus</button>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        // ADMIN MODAL HANDLERS
+        function openAddResidentModal() {
+            document.getElementById('modal-title').innerText = 'Tambah Data Warga Baru';
+            document.getElementById('form-id').value = '';
+            document.getElementById('form-name').value = '';
+            document.getElementById('form-block').value = 'Blok A';
+            document.getElementById('form-no').value = '';
+            document.getElementById('form-phone').value = '';
+            document.getElementById('form-status').value = 'Tetap';
+            document.getElementById('form-members').value = 4;
+            document.getElementById('modal-resident').classList.remove('hidden');
+        }
+
+        function openEditResidentModal(id) {
+            const h = state.houses.find(item => item.id === id);
+            if (!h) return;
+
+            document.getElementById('modal-title').innerText = 'Edit Data Warga';
+            document.getElementById('form-id').value = h.id;
+            document.getElementById('form-name').value = h.owner;
+            document.getElementById('form-block').value = h.block;
+            document.getElementById('form-no').value = h.no;
+            document.getElementById('form-phone').value = h.phone;
+            document.getElementById('form-status').value = h.status;
+            document.getElementById('form-members').value = h.members;
+            document.getElementById('modal-resident').classList.remove('hidden');
+        }
+
+        function closeResidentModal() {
+            document.getElementById('modal-resident').classList.add('hidden');
+        }
+
+        function handleSaveResident(e) {
+            e.preventDefault();
+            const id = document.getElementById('form-id').value;
+            const owner = document.getElementById('form-name').value;
+            const block = document.getElementById('form-block').value;
+            const no = document.getElementById('form-no').value;
+            const phone = document.getElementById('form-phone').value;
+            const status = document.getElementById('form-status').value;
+            const members = parseInt(document.getElementById('form-members').value) || 1;
+
+            if (id) {
+                // EDIT
+                const idx = state.houses.findIndex(h => h.id === id);
+                if (idx !== -1) {
+                    state.houses[idx] = { id, owner, block, no, phone, status, members };
+                    logTelemetry(`[DATABASE UPDATE] Resident ${owner} (${block} ${no}) updated.`);
+                    showToast('Data warga berhasil diperbarui.', 'green');
+                }
+            } else {
+                // ADD NEW
+                const newId = 'h_' + Date.now();
+                state.houses.push({ id: newId, owner, block, no, phone, status, members });
+                logTelemetry(`[DATABASE ADD] New resident added: ${owner} (${block} ${no})`);
+                showToast('Warga baru berhasil ditambahkan.', 'green');
+            }
+
+            closeResidentModal();
+            renderHouseDropdown();
+            renderMapGrid();
+            renderDirectoryGrid();
+            renderAdminTable();
+            updateStats();
+        }
+
+        function confirmDeleteResident(id) {
+            const h = state.houses.find(item => item.id === id);
+            if (!h) return;
+
+            if (state.houses.length <= 1) {
+                showToast('Minimal harus ada 1 data warga!', 'red');
+                return;
+            }
+
+            state.houses = state.houses.filter(item => item.id !== id);
+            logTelemetry(`[DATABASE DELETE] Resident ${h.owner} deleted.`);
+            showToast(`Data ${h.owner} telah dihapus.`, 'amber');
+
+            renderHouseDropdown();
+            renderMapGrid();
+            renderDirectoryGrid();
+            renderAdminTable();
+            updateStats();
+        }
+
+        // EXPORT DATA
+        function exportDataJSON() {
+            const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(state.houses, null, 2));
+            const downloadAnchor = document.createElement('a');
+            downloadAnchor.setAttribute("href", dataStr);
+            downloadAnchor.setAttribute("download", `database_warga_rt05_${Date.now()}.json`);
+            document.body.appendChild(downloadAnchor);
+            downloadAnchor.click();
+            downloadAnchor.remove();
+            showToast('Database berhasil diexport.', 'green');
+        }
+
+        // STATS UPDATE
+        function updateStats() {
+            document.getElementById('stat-total-houses').innerText = state.houses.length;
+            document.getElementById('stat-total-events').innerText = state.history.length;
+            const activeElem = document.getElementById('stat-active-alarm');
+            if (state.activeEmergency) {
+                activeElem.innerText = 'AKTIF 🚨';
+                activeElem.className = 'text-2xl font-black text-red-500 animate-pulse mt-1';
+            } else {
+                activeElem.innerText = 'NIHIL';
+                activeElem.className = 'text-2xl font-black text-slate-500 mt-1';
+            }
+        }
+
+        // TELEMETRY LOG
+        function logTelemetry(msg) {
+            const logBox = document.getElementById('admin-telemetry-log');
+            if (!logBox) return;
+            const time = new Date().toLocaleTimeString('id-ID');
+            const item = document.createElement('div');
+            item.innerText = `[${time}] ${msg}`;
+            logBox.appendChild(item);
+            logBox.scrollTop = logBox.scrollHeight;
+        }
+
+        // HARDWARE TESTS
+        function testTTSAnnouncement() {
+            const sample = state.houses[0];
+            speakText(`Tes pengumuman suara sistem alarm darurat RT 05. Rumah ${sample.block} ${sample.no} milik ${sample.owner} dalam kondisi aman.`, null);
+            logTelemetry(`[HARDWARE TEST] Text-to-Speech test triggered.`);
+        }
+
+        function testHardwareHorn() {
+            startSiren();
+            showToast('Uji Coba Sirine Horn (3 Detik)', 'amber');
+            setTimeout(() => {
+                stopSiren();
+            }, 3000);
+            logTelemetry(`[HARDWARE TEST] TOA Siren Horn test triggered.`);
+        }
+
+        // TOAST NOTIFICATIONS
+        function showToast(message, type = 'green') {
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            
+            let bgClass = 'bg-emerald-600';
+            if (type === 'red') bgClass = 'bg-red-600';
+            if (type === 'amber') bgClass = 'bg-amber-600';
+
+            toast.className = `${bgClass} text-white px-4 py-2.5 rounded-xl text-xs font-bold shadow-2xl transition duration-300 transform translate-y-2 opacity-0`;
+            toast.innerText = message;
+            container.appendChild(toast);
+
+            setTimeout(() => {
+                toast.classList.remove('translate-y-2', 'opacity-0');
+            }, 10);
+
+            setTimeout(() => {
+                toast.classList.add('opacity-0');
+                setTimeout(() => toast.remove(), 300);
+            }, 3000);
+        }
+    </script>
+</body>
+</html>
